@@ -1,0 +1,60 @@
+#deployment & service in 1 file
+#-------------------
+#deployment
+#by right, we should use "stateful" for database, 
+#but to keep it simply we use deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-deployment
+  labels:
+    app: webapp #common label for deployments
+spec:
+  replicas: 1  # how many pods we want to create using blueprint (template)
+  selector:  # identify resources
+    matchLabels: #match all pods with label "app:webapp"
+      app: webapp
+  template: # "blueprint for pods", config of pods within config of deployment
+    metadata:
+      labels: #common label for all pods
+        app: webapp
+    spec:
+      containers:
+      - name: webapp #create pods with webapp:5.0 image
+        image: nanajanashia/k8s-demo-app:v1.0 #use nana's https://hub.docker.com/r/nanajanashia/k8s-demo-app/tags
+        ports:
+        - containerPort: 3000 # nodejs app listens on port 3000
+        env: #set up username and password to access mongodb
+        - name: USER_NAME
+          valueFrom:
+            secretKeyRef: #get from secret
+              name: mongo-secret 
+              key: mongo-user
+        - name: USER_PWD
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret
+              key: mongo-password
+        - name: DB_URL
+          valueFrom:
+            configMapKeyRef: #get from config map about db endpoint: url
+              name: mongo-config
+              key: mongo-url
+--- # we can have multiple YAML configs in 1 file, --- separates the configs
+# external service
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-service
+spec:
+  type: NodePort #NodePort is for external, default = ClusterIP -> internal
+  selector:
+    app: webapp #label of pods
+  #request comes in, first it goes to port 27017, which is webapp service
+  #then it goes to port 27017, which is target port
+  #from target port 27017, it reaches container port 27017, which is the pod
+  ports:
+    - protocol: TCP
+      port: 3000 # can be anything, normally use the same value as targetPort
+      targetPort: 3000 #same as container port
+      nodePort: 30100 #there's a range for node port
